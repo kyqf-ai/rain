@@ -1,0 +1,619 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light dark">
+<title>雨量监测系统</title>
+<style>
+:root{
+  --bg:#eef1f6; --bg-rgb:238,241,246; --card:#fff; --fg:#182230; --mut:#5f6b7d;
+  --line:#e2e7ef; --pri:#1f6fd6; --pri-weak:rgba(31,111,214,.10); --prov:#e8940a;
+  --bad:#d24040; --ok:#1f9d55; --none:#b6bfcc;
+  --shadow:0 1px 2px rgba(16,24,40,.05),0 6px 20px rgba(16,24,40,.07);
+  --shadow-lg:0 2px 6px rgba(16,24,40,.08),0 16px 40px rgba(16,24,40,.10);
+}
+@media(prefers-color-scheme:dark){
+:root{
+  --bg:#0e141b; --bg-rgb:14,20,27; --card:#161e28; --fg:#e7ecf3; --mut:#8b98ab;
+  --line:#253040; --pri:#5f9bff; --pri-weak:rgba(95,155,255,.12); --prov:#f5ad3d;
+  --bad:#ef6a6a; --ok:#46c483; --none:#4c5a6d;
+  --shadow:0 1px 2px rgba(0,0,0,.35),0 6px 20px rgba(0,0,0,.30);
+  --shadow-lg:0 2px 6px rgba(0,0,0,.45),0 16px 40px rgba(0,0,0,.35);
+}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.6 system-ui,"Segoe UI","Microsoft YaHei","PingFang SC",sans-serif;
+  -webkit-font-smoothing:antialiased}
+::-webkit-scrollbar{width:9px;height:9px}
+::-webkit-scrollbar-thumb{background:var(--line);border-radius:8px;border:2px solid var(--bg)}
+::-webkit-scrollbar-track{background:transparent}
+:focus-visible{outline:2px solid var(--pri);outline-offset:2px;border-radius:4px}
+
+/* ---------- header ---------- */
+.top{background:linear-gradient(140deg,#12557c 0%,#2579a6 55%,#3d9dc0 100%);color:#fff;
+  padding:20px 20px 54px}
+.topbar{display:flex;align-items:center;gap:16px;max-width:1200px;margin:0 auto}
+.brand{min-width:170px}
+.clock{font-size:36px;line-height:1.05;font-weight:300;letter-spacing:1px;
+  font-variant-numeric:tabular-nums;text-shadow:0 1px 2px rgba(0,0,0,.15)}
+.dateline{font-size:12.5px;opacity:.88;margin-top:4px;letter-spacing:.5px}
+.title{flex:1;text-align:center;min-width:0}
+.title h1{font-size:22px;margin:0;letter-spacing:3px;font-weight:600;
+  text-shadow:0 1px 3px rgba(0,0,0,.18)}
+.title .en{font-size:11.5px;opacity:.78;letter-spacing:1.5px;margin-top:2px;text-transform:uppercase}
+.right{min-width:170px;text-align:right;font-size:12px;line-height:1.5}
+.badge{display:inline-block;padding:3px 12px;border-radius:999px;font-size:12.5px;font-weight:600;
+  color:#fff;background:#8a97a6;box-shadow:0 1px 3px rgba(0,0,0,.2);letter-spacing:.5px}
+.badge.ok{background:#23a163}.badge.bad{background:#d84c4c}.badge.warn{background:#dd9a26}
+.dev{display:block;margin-top:5px;opacity:.95}
+.sub{display:block;opacity:.75}
+
+/* ---------- floating metric cards ---------- */
+.metrics{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;
+  max-width:1200px;margin:-40px auto 0;padding:0 20px}
+.metric{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:13px 16px 12px;box-shadow:var(--shadow);position:relative;overflow:hidden;
+  transition:transform .15s ease,box-shadow .15s ease}
+.metric:hover{transform:translateY(-2px);box-shadow:var(--shadow-lg)}
+.metric::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;
+  background:var(--pri);opacity:.75}
+.metric:nth-child(2)::before{background:#0e9cb7}
+.metric:nth-child(3)::before{background:#7a5af8}
+.metric:nth-child(4)::before{background:#0ea5b7}
+.metric:nth-child(5)::before{background:#1f9d55}
+.metric .k{font-size:12px;color:var(--mut);letter-spacing:.3px}
+.metric .v{font-size:25px;font-weight:650;margin-top:3px;white-space:nowrap;
+  font-variant-numeric:tabular-nums;letter-spacing:.3px}
+.metric .v small{font-size:12px;font-weight:400;color:var(--mut);margin-left:4px}
+
+/* ---------- sticky toolbar ---------- */
+.toolrow{position:sticky;top:0;z-index:30;display:flex;align-items:center;gap:10px;
+  padding:0 20px;max-width:1200px;margin:0 auto;
+  background:rgba(var(--bg-rgb),.86);backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);border-bottom:1px solid var(--line);flex-wrap:wrap}
+nav{display:flex;gap:2px;flex:1;overflow-x:auto}
+nav button{border:0;background:none;color:var(--mut);padding:13px 15px;font:inherit;font-size:14px;
+  cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;
+  transition:color .15s ease,border-color .15s ease}
+nav button:hover{color:var(--fg)}
+nav button.on{color:var(--pri);border-color:var(--pri);font-weight:650}
+.reports{display:flex;gap:6px;padding:7px 0}
+
+/* ---------- layout ---------- */
+main{padding:16px 20px 34px;max-width:1200px;margin:0 auto}
+.tab{display:none}.tab.on{display:block;animation:fadein .18s ease}
+@keyframes fadein{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.bar.center{justify-content:center;margin-top:12px}
+button.b,input,select{font:inherit;font-size:13.5px;color:var(--fg);background:var(--card);
+  border:1px solid var(--line);border-radius:8px;padding:6px 12px;height:32px;
+  transition:border-color .15s ease,box-shadow .15s ease,background .15s ease}
+input,select{min-width:0}
+input:focus,select:focus{border-color:var(--pri);box-shadow:0 0 0 3px var(--pri-weak);outline:none}
+button.b{cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-weight:500}
+button.b:hover{border-color:var(--pri);color:var(--pri)}
+button.b:active{transform:translateY(1px)}
+button.b.p{background:var(--pri);border-color:var(--pri);color:#fff}
+button.b.p:hover{filter:brightness(1.08);color:#fff}
+button.icon{width:26px;height:26px;padding:0;border-radius:6px;display:inline-flex;
+  align-items:center;justify-content:center;border:1px solid var(--line);background:none;
+  color:var(--mut);cursor:pointer;font-size:12px}
+button.icon:hover{border-color:var(--bad);color:var(--bad)}
+a.b{display:inline-flex;align-items:center;text-decoration:none;height:32px}
+a.b:hover{border-color:var(--pri);color:var(--pri)}
+
+/* ---------- stat strip (day view) ---------- */
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px}
+.stat{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px 14px;
+  box-shadow:var(--shadow)}
+.stat .k{color:var(--mut);font-size:12px}
+.stat .v{font-size:21px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.stat .v small{font-size:11.5px;font-weight:400;color:var(--mut);margin-left:3px}
+.stat .s{font-size:11.5px;color:var(--mut);margin-top:1px;white-space:nowrap;
+  overflow:hidden;text-overflow:ellipsis;min-height:14px}
+
+/* ---------- panels / charts ---------- */
+.panel{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:14px 16px 12px;margin-bottom:12px;box-shadow:var(--shadow)}
+.panel-head{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.panel-head h3{margin:0;font-size:14.5px;font-weight:650;flex:1}
+canvas{display:block;width:100%;height:300px}
+canvas.sm{height:200px}
+.legend{display:flex;gap:16px;flex-wrap:wrap;color:var(--mut);font-size:12px;margin-top:10px;
+  padding-top:9px;border-top:1px dashed var(--line)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+.legend span{display:inline-flex;align-items:center}
+
+/* ---------- cards (query summary) ---------- */
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:11px 14px;
+  box-shadow:var(--shadow)}
+.card .k{color:var(--mut);font-size:12px}
+.card .v{font-size:22px;font-weight:650;margin-top:2px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.card .v small{font-size:11.5px;font-weight:400;color:var(--mut);margin-left:3px}
+.card .s{font-size:11.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+/* ---------- tables ---------- */
+.wrap{overflow:auto;max-height:66vh;border:1px solid var(--line);border-radius:12px;
+  background:var(--card);box-shadow:var(--shadow)}
+table{width:100%;border-collapse:collapse;background:var(--card)}
+th,td{padding:7px 12px;text-align:right;border-bottom:1px solid var(--line);
+  white-space:nowrap;font-variant-numeric:tabular-nums;font-size:13.5px}
+th:first-child,td:first-child{text-align:left}
+th{color:var(--mut);font-weight:600;font-size:12px;position:sticky;top:0;z-index:2;
+  background:var(--card);box-shadow:inset 0 -1px 0 var(--line)}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:nth-child(even){background:rgba(var(--bg-rgb),.55)}
+tbody tr:hover{background:var(--pri-weak)}
+td.l,th.l{text-align:left}
+tr.click{cursor:pointer}
+tr.sel td{background:var(--pri-weak)}
+.mut{color:var(--mut)}
+.rain{font-weight:650;color:var(--pri)}
+td.st2{color:var(--pri);font-weight:500}
+td.st1{color:var(--prov);font-weight:500}
+td.st0{color:var(--none)}
+td.st0.miss{color:var(--bad);opacity:.75}
+td.k-clock{color:var(--prov);font-weight:500}
+td.k-volt{color:var(--bad);font-weight:500}
+td.lowb{color:var(--bad);font-weight:600}
+td.warnclk{color:var(--prov);font-weight:600}
+
+/* ---------- misc ---------- */
+.msg{padding:16px;color:var(--mut)}
+.note{color:var(--mut);font-size:12.5px;margin:10px 2px;line-height:1.7}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--card);
+  border:1px solid var(--line);border-radius:999px;padding:4px 12px;font-size:12.5px;color:var(--mut)}
+.chip b{color:var(--fg);font-weight:600;font-variant-numeric:tabular-nums}
+footer{max-width:1200px;margin:0 auto;padding:0 20px 26px;color:var(--mut);font-size:12px;
+  display:flex;gap:14px;flex-wrap:wrap;justify-content:space-between}
+.refresh-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--ok);
+  margin-right:6px;animation:pulse 2.4s ease infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.35}}
+
+@media(max-width:860px){
+  .metrics{grid-template-columns:repeat(2,1fr);margin-top:-30px}
+  .metrics .metric:last-child{grid-column:1/-1}
+  .brand,.right{min-width:0}
+  .clock{font-size:28px}
+  .title h1{font-size:17px;letter-spacing:2px}
+  .title .en{display:none}
+  main{padding:12px 12px 26px}
+  .top{padding:14px 12px 46px}
+  .toolrow{padding:0 12px}
+  .metrics{padding:0 12px}
+  canvas{height:240px}
+  .wrap{max-height:56vh}
+}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="topbar">
+    <div class="brand">
+      <div class="clock" id="clock">--:--</div>
+      <div class="dateline" id="dateline"></div>
+    </div>
+    <div class="title">
+      <h1>雨量监测系统</h1>
+      <div class="en">Rainfall Monitoring System</div>
+    </div>
+    <div class="right">
+      <span class="badge" id="badge">…</span>
+      <span class="dev" id="dev"></span>
+      <span class="sub" id="sub"></span>
+    </div>
+  </div>
+</header>
+
+<section class="metrics" aria-label="关键指标">
+  <div class="metric"><div class="k">滑动小时雨量</div><div class="v"><b id="mSlide">–</b><small>mm</small></div></div>
+  <div class="metric"><div class="k">全天日降雨量</div><div class="v"><b id="mDay">–</b><small>mm</small></div></div>
+  <div class="metric"><div class="k">本次连续雨量</div><div class="v"><b id="mEvent">–</b><small>mm</small></div></div>
+  <div class="metric"><div class="k">本月降雨量</div><div class="v"><b id="mMonth">–</b><small>mm</small></div></div>
+  <div class="metric"><div class="k">今年降雨量</div><div class="v"><b id="mYear">–</b><small>mm</small></div></div>
+</section>
+
+<div class="toolrow">
+  <nav>
+    <button data-tab="day" class="on">当日 24 小时雨量</button>
+    <button data-tab="query">查询统计</button>
+    <button data-tab="alarm">报警查询</button>
+    <button data-tab="status">设备状态</button>
+  </nav>
+  <div class="reports">
+    <button class="b" data-rep="day">日报表</button>
+    <button class="b" data-rep="month">月报表</button>
+    <button class="b" data-rep="year">年报表</button>
+  </div>
+</div>
+
+<main>
+<!-- ================= 当日 ================= -->
+<section class="tab on" id="tab-day">
+  <div class="bar">
+    <button class="b" id="prev">◀ 前一天</button>
+    <input type="date" id="date" aria-label="选择日期">
+    <button class="b" id="next">后一天 ▶</button>
+    <button class="b p" id="today">今天</button>
+    <span class="chip" id="auto">加载中…</span>
+  </div>
+
+  <div class="stats">
+    <div class="stat"><div class="k">日累计雨量</div><div class="v"><b id="cTotal">–</b><small>mm</small></div></div>
+    <div class="stat"><div class="k">数据完整度（小时）</div><div class="v"><b id="cCov">–</b></div><div class="s">有数据 / 应有</div></div>
+    <div class="stat"><div class="k">最大小时雨量</div><div class="v"><b id="cMaxH">–</b><small>mm</small></div><div class="s" id="cMaxHT">&nbsp;</div></div>
+    <div class="stat"><div class="k">有雨小时数</div><div class="v"><b id="cRainH">–</b><small>小时</small></div><div class="s" id="cRainHT">&nbsp;</div></div>
+  </div>
+
+  <div class="panel">
+    <div class="panel-head"><h3 id="dayTitle">24 小时雨量</h3></div>
+    <canvas id="cDay"></canvas>
+    <div class="legend">
+      <span><i style="background:var(--pri)"></i>已定稿</span>
+      <span><i style="background:var(--prov)"></i>实时 / 待定稿</span>
+      <span><i style="background:var(--none)"></i>缺数据</span>
+      <span>悬停查看数值 · 点击柱子或表格行查看分钟明细</span>
+    </div>
+  </div>
+
+  <div class="panel" id="minPanel" style="display:none">
+    <div class="panel-head"><h3 id="minTitle"></h3><button class="icon" id="minClose" aria-label="关闭明细">✕</button></div>
+    <canvas id="cMin" class="sm"></canvas>
+  </div>
+
+  <div class="wrap">
+    <table>
+      <thead><tr><th>时段</th><th>雨量 mm</th><th>累计 mm</th><th class="l">状态</th><th>气温 ℃</th></tr></thead>
+      <tbody id="tDay"></tbody>
+    </table>
+  </div>
+  <div class="bar center"><button class="b" id="prev2">◀ 上一天</button><button class="b" id="next2">下一天 ▶</button></div>
+</section>
+
+<!-- ================= 查询统计 ================= -->
+<section class="tab" id="tab-query">
+  <div class="bar">
+    <span class="mut">区间</span>
+    <input type="date" id="qFrom" aria-label="开始日期">
+    <span class="mut">至</span>
+    <input type="date" id="qTo" aria-label="结束日期">
+    <select id="qBy"><option value="day">按日</option><option value="month">按月</option><option value="hour">按小时</option></select>
+    <button class="b p" id="qGo">查询</button>
+    <a class="b" id="qCsv" href="#">导出 CSV</a>
+  </div>
+  <div class="bar">
+    <button class="b" data-q="7">近 7 天</button>
+    <button class="b" data-q="30">近 30 天</button>
+    <button class="b" data-q="month">本月</button>
+    <button class="b" data-q="year">今年</button>
+  </div>
+  <div class="cards" id="qCards"></div>
+  <div class="panel">
+    <canvas id="cQ"></canvas>
+    <div class="legend"><span><i style="background:var(--pri)"></i>雨量</span><span><i style="background:var(--none)"></i>该时段无数据</span></div>
+  </div>
+  <div class="wrap">
+    <table>
+      <thead><tr><th>时间</th><th>雨量 mm</th><th>有数据小时数</th><th>有雨小时数</th><th>最大小时 mm</th></tr></thead>
+      <tbody id="tQ"></tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ================= 报警查询 ================= -->
+<section class="tab" id="tab-alarm">
+  <div class="bar">
+    <span class="chip" id="alarmNote">加载中…</span>
+    <button class="b" id="alarmReload">刷新</button>
+  </div>
+  <div class="wrap">
+    <table>
+      <thead><tr><th>时间</th><th class="l">类型</th><th class="l">内容</th></tr></thead>
+      <tbody id="tAlarm"></tbody>
+    </table>
+  </div>
+  <p class="note">报警记录由采集程序保存的电压 / 时钟状态历史推断：时钟偏差超过 5 分钟、电池电压低于设备报警值。</p>
+</section>
+
+<!-- ================= 设备状态 ================= -->
+<section class="tab" id="tab-status">
+  <div class="wrap" style="max-height:none">
+    <table>
+      <thead><tr><th style="width:44%">项目</th><th class="l">数值</th></tr></thead>
+      <tbody id="tStat"></tbody>
+    </table>
+  </div>
+  <p class="note">说明：电压字段已与原软件数据库逐项核对；“设备温度”和“状态标志”的含义尚未确认，仅原样显示。</p>
+</section>
+</main>
+
+<footer>
+  <span>雨量监测系统 · 本地采集程序提供数据 · © 2026 四川商舟实业有限公司</span>
+  <span><span class="refresh-dot"></span>页面每 30 秒自动刷新</span>
+</footer>
+
+<script>
+"use strict";
+const $=s=>document.querySelector(s), pad=n=>String(n).padStart(2,'0');
+const ymd=d=>d.getFullYear()+'-'+pad(d.getMonth()+1)+'-'+pad(d.getDate());
+const parseYmd=s=>{const p=s.split('-');return new Date(+p[0],+p[1]-1,+p[2])};
+const num=v=>String(+(+v).toFixed(2));
+const mm1=v=>(+v).toFixed(1);
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+async function api(u){const r=await fetch(u,{cache:'no-store'});let j;try{j=await r.json()}catch(e){throw new Error('HTTP '+r.status)}
+  if(!r.ok||j.error)throw new Error(j.error||('HTTP '+r.status));return j}
+function el(tag,text,cls){const e=document.createElement(tag);if(text!=null)e.textContent=text;if(cls)e.className=cls;return e}
+function fillRows(tb,rows){tb.textContent='';rows.forEach(r=>{const tr=document.createElement('tr');r.forEach((c,i)=>{const td=el('td',c.t!=null?c.t:c,c.c||'');tr.appendChild(td)});tb.appendChild(tr)})}
+function niceStep(x){const p=Math.pow(10,Math.floor(Math.log10(x||1))),m=x/p;return(m<=1?1:m<=2?2:m<=5?5:10)*p}
+
+/* generic bar chart. items: [{label,v,s,tip}], s: 2 final, 1 provisional, 0 missing, -1 not yet.
+   opt: {minMax,labelW,onclick,now} — now = slot index marked with a "现在" cursor (today only). */
+function bars(cv,items,opt){
+  const st=cv._bars||(cv._bars={hover:-1});
+  st.items=items;st.opt=opt||{};st.hover=-1;
+  const draw=()=>{
+    const dpr=window.devicePixelRatio||1,W=cv.clientWidth,H=cv.clientHeight;
+    if(!W)return;
+    cv.width=W*dpr;cv.height=H*dpr;
+    const g=cv.getContext('2d');g.setTransform(dpr,0,0,dpr,0,0);g.clearRect(0,0,W,H);
+    const L=48,R=12,T=18,B=28,pw=W-L-R,ph=H-T-B,n=items.length||1,bw=pw/n;
+    st.L=L;st.bw=bw;
+    const max=Math.max(st.opt.minMax||1,...items.map(i=>i.v)),step=niceStep(max/4),
+          top=Math.ceil(max/step-1e-9)*step,base=T+ph;
+    g.font='12px system-ui,"Segoe UI","Microsoft YaHei",sans-serif';g.lineWidth=1;
+    for(let y=0;y<=top+1e-9;y+=step){
+      const py=Math.round(base-ph*y/top)+.5;
+      g.strokeStyle=css('--line');g.globalAlpha=y===0?1:.55;
+      g.beginPath();g.moveTo(L,py);g.lineTo(W-R,py);g.stroke();g.globalAlpha=1;
+      g.fillStyle=css('--mut');g.textAlign='right';g.textBaseline='middle';g.fillText(num(y),L-7,py)}
+    if(st.hover>=0){g.fillStyle=css('--pri');g.globalAlpha=.07;
+      g.fillRect(L+st.hover*bw,T,bw,ph);g.globalAlpha=1}
+    items.forEach((it,i)=>{
+      const x=L+i*bw,w=Math.max(bw*.72,1),x0=x+bw*.14;
+      if(it.s===0){g.fillStyle=css('--none');g.fillRect(x+bw*.28,base-1.5,Math.max(bw*.44,1),2);return}
+      if(it.s>0){
+        const col=it.s===2?css('--pri'):css('--prov'),h=ph*it.v/top,yTop=base-h;
+        g.fillStyle=col;
+        if(it.v>0){
+          const r=Math.min(2.5,w*.22,h);
+          if(h>=5&&w>=8){
+            g.fillRect(x0,yTop+2,w,h-2);
+            g.beginPath();g.moveTo(x0,base);g.lineTo(x0,yTop+r);
+            g.quadraticCurveTo(x0,yTop,x0+r,yTop);g.lineTo(x0+w-r,yTop);
+            g.quadraticCurveTo(x0+w,yTop,x0+w,yTop+r);g.lineTo(x0+w,base);
+            g.closePath();g.fill()}
+          else g.fillRect(x0,base-Math.max(h,1.5),w,Math.max(h,1.5));
+          if(w>=22||i===st.hover){
+            g.fillStyle=css('--fg');g.textAlign='center';g.textBaseline='bottom';
+            g.fillText(num(it.v),x+bw/2,yTop-3)}
+        }else{g.globalAlpha=.3;g.fillRect(x0,base-2,w,2);g.globalAlpha=1}
+      }});
+    if(st.opt.now!=null&&st.opt.now>=0&&st.opt.now<n){
+      const d=new Date(),f=Math.min((d.getMinutes()+d.getSeconds()/60)/60,1),
+            px=Math.round(L+(st.opt.now+f)*bw)+.5;
+      g.strokeStyle=css('--prov');g.setLineDash([4,3]);g.globalAlpha=.9;
+      g.beginPath();g.moveTo(px,T+2);g.lineTo(px,base);g.stroke();
+      g.setLineDash([]);g.globalAlpha=1;
+      g.fillStyle=css('--prov');g.textAlign=px>W-R-34?'right':'left';g.textBaseline='top';
+      g.fillText('现在',px>W-R-34?px-4:px+4,T+1)}
+    const every=Math.max(1,Math.ceil(n/Math.max(1,Math.floor(pw/(st.opt.labelW||34)))));
+    g.fillStyle=css('--mut');
+    items.forEach((it,i)=>{if(i%every===0){g.textAlign='center';g.textBaseline='top';
+      g.fillText(it.label,L+i*bw+bw/2,base+7)}});
+  };
+  st.draw=draw;draw();
+  const hit=e=>{const r=cv.getBoundingClientRect();
+    const i=Math.floor((e.clientX-r.left-st.L)/st.bw);return(i>=0&&i<st.items.length)?i:-1};
+  cv.onmousemove=e=>{const i=hit(e);
+    if(i!==st.hover){st.hover=i;st.draw()}
+    cv.title=i>=0?(st.items[i].tip||''):''};
+  cv.onmouseleave=()=>{if(st.hover!==-1){st.hover=-1;st.draw()}};
+  cv.style.cursor=st.opt.onclick?'pointer':'default';
+  cv.onclick=st.opt.onclick?e=>{const i=hit(e);if(i>=0)st.opt.onclick(i)}:null;
+}
+
+/* ---------- clock ---------- */
+const WD=['星期日','星期一','星期二','星期三','星期四','星期五','星期六'];
+function tick(){const d=new Date();$('#clock').textContent=pad(d.getHours())+':'+pad(d.getMinutes());
+  $('#dateline').textContent=d.getFullYear()+' 年 '+(d.getMonth()+1)+' 月 '+d.getDate()+' 日 '+WD[d.getDay()];}
+tick();setInterval(tick,1000);
+
+/* ---------- header metrics ---------- */
+async function loadSummary(){
+  try{const s=await api('/api/summary');
+    $('#mSlide').textContent=mm1(s.sliding_hour);$('#mDay').textContent=mm1(s.day_total);
+    $('#mEvent').textContent=mm1(s.event_total);$('#mMonth').textContent=mm1(s.month_total);
+    $('#mYear').textContent=mm1(s.year_total);
+  }catch(e){['mSlide','mDay','mEvent','mMonth','mYear'].forEach(id=>$('#'+id).textContent='–')}
+}
+
+/* ---------- header / status ---------- */
+const STATES={online:['在线','ok'],offline:['设备无响应','bad'],port_error:['串口异常','bad'],no_reply:['设备无应答','bad'],
+  machine_mismatch:['机号不符','bad'],stopped:['采集已停止','warn'],starting:['启动中','warn'],backfill:['正在补齐历史数据','warn'],unknown:['未采集','']};
+let lastStatus=null;
+async function loadStatus(){
+  try{const s=await api('/api/status');lastStatus=s;
+    if(s.error){$('#badge').textContent='尚无设备数据';$('#badge').className='badge warn';return s}
+    $('#dev').textContent=(s.name&&s.name!==s.machine?s.name+' · ':'')+s.machine;
+    let st=STATES[s.state]||[s.state,''];let cls=st[1],txt=st[0];
+    if(s.state==='online'&&s.updated){const age=(Date.parse(s.now.replace(' ','T'))-Date.parse(s.updated.replace(' ','T')))/1000;
+      if(age>180){txt='采集无心跳';cls='warn'}}
+    $('#badge').textContent=txt;$('#badge').className='badge '+cls;
+    $('#sub').textContent=s.last_ok?'最近正常通信 '+s.last_ok:'';
+    return s}catch(e){$('#badge').textContent='无法连接';$('#badge').className='badge bad';return null}
+}
+function renderStatus(){
+  const s=lastStatus,tb=$('#tStat');
+  if(!s||s.error){fillRows(tb,[[{t:'状态',c:'l mut'},{t:s?s.error:'无数据',c:'l mut'}]]);return}
+  const V=v=>(v/1000).toFixed(3)+' V';
+  const lowB=s.v_alarm>0&&s.v_static>0&&s.v_static<s.v_alarm, badClk=Math.abs(s.clock_off)>300;
+  const R=[
+    ['设备机号',s.machine,''],
+    ['采集状态',(STATES[s.state]||[s.state])[0]+(s.msg?'（'+s.msg+'）':''),''],
+    ['最近正常通信',s.last_ok||'–',''],
+    ['状态更新时间',s.updated||'–',''],
+    ['设备时钟',s.dev_time||'–',''],
+    ['与电脑时差',s.dev_time?((s.clock_off>0?'+':'')+s.clock_off+' 秒'):'–',badClk?'warnclk':''],
+    ['电池电压（静态）',V(s.v_static),lowB?'lowb':''],
+    ['电池电压（动态）',V(s.v_dyn),''],
+    ['太阳能电压',V(s.v_sun),''],
+    ['电压报警阈值',V(s.v_alarm),''],
+    ['电压挂起阈值',V(s.v_hang),''],
+    ['设备温度（待确认）',s.temp_c+' ℃',''],
+    ['状态标志（待确认）',s.flags||'–',''],
+    ['最近定稿小时',s.last_final_hour||'–',''],
+    ['最近数据小时',s.last_hour||'–','']];
+  fillRows(tb,R.map(r=>[{t:r[0],c:'l mut'},{t:r[1],c:'l'+(r[2]?' '+r[2]:'')}]));
+}
+
+/* ---------- day view ---------- */
+let curDate=ymd(new Date()),dayData=null,lastMinH=-1;
+function dayInfo(d){const isToday=curDate===d.now.slice(0,10),nowH=+d.now.slice(11,13);
+  return{isToday,nowH,exp:isToday?nowH+1:(curDate>d.now.slice(0,10)?0:24)}}
+function drawDay(){if(!dayData)return;const d=dayData,inf=dayInfo(d);
+  const items=d.hours.map(h=>{const s=h.h>=inf.exp?(h.s>0?h.s:-1):h.s;
+    return{label:pad(h.h),v:h.v,s:s,tip:pad(h.h)+':00–'+pad(h.h)+':59  '+(h.s?num(h.v)+' mm':'无数据')}});
+  bars($('#cDay'),items,{minMax:1,onclick:i=>{if(d.hours[i].s)loadMinutes(i)},labelW:22,
+    now:inf.isToday?inf.nowH:null});
+}
+async function loadDay(){
+  try{const d=await api('/api/day?date='+curDate);dayData=d;const inf=dayInfo(d);
+    $('#date').value=curDate;
+    $('#dayTitle').textContent=curDate+'（'+WD[parseYmd(curDate).getDay()]+'）24 小时雨量';
+    $('#cTotal').textContent=num(d.total);
+    $('#cCov').textContent=(d.hours_with_data||0)+' / '+inf.exp;
+    $('#cMaxH').textContent=d.max_h>=0?num(d.max):'0';
+    $('#cMaxHT').textContent=d.max_h>=0?pad(d.max_h)+':00–'+pad(d.max_h)+':59 时段':'';
+    $('#cRainH').textContent=d.rain_hours;
+    $('#cRainHT').textContent=d.rain_hours?('占已采 '+d.hours_with_data+' 小时'):'';
+    let cum=0;
+    fillRows($('#tDay'),d.hours.map(h=>{cum+=h.v;const live=h.s===1;
+      const st=h.s===2?'已定稿':live?(inf.isToday&&h.h===inf.nowH?'实时（本小时未结束）':'待定稿'):(h.h<inf.exp?'缺数据':'–');
+      return[pad(h.h)+':00–'+pad(h.h)+':59',
+        {t:h.s?num(h.v):'',c:h.v>0?'rain':''},
+        h.s?num(cum):'',
+        {t:st,c:'l st'+h.s+(h.s===0&&h.h<inf.exp?' miss':'')},
+        h.t!=null?h.t.toFixed(1):''];}));
+    document.querySelectorAll('#tDay tr').forEach((tr,i)=>{
+      tr.classList.add('click');tr.classList.toggle('sel',i===lastMinH);
+      tr.onclick=()=>{if(dayData&&dayData.hours[i]&&dayData.hours[i].s)loadMinutes(i)}});
+    drawDay();
+    $('#auto').innerHTML='<span class="refresh-dot"></span>'+(inf.isToday?'每 30 秒自动刷新 · 更新于 '+d.now.slice(11,19):'历史日期');
+  }catch(e){
+    $('#tDay').textContent='';const tr=el('tr');const td=el('td','暂无数据：'+e.message,'msg');td.colSpan=5;tr.appendChild(td);
+    $('#tDay').appendChild(tr);dayData=null;bars($('#cDay'),[],{});
+    $('#auto').textContent='加载失败';}
+}
+async function loadMinutes(h){
+  const key=curDate+' '+pad(h),box=$('#minPanel');box.style.display='block';lastMinH=h;
+  document.querySelectorAll('#tDay tr').forEach((tr,i)=>tr.classList.toggle('sel',i===h));
+  try{const m=await api('/api/minutes?hour='+encodeURIComponent(key));
+    $('#minTitle').textContent=pad(h)+':00–'+pad(h)+':59 分钟明细（合计 '+num(m.total)+' mm'+(m.s===0?'，该小时无数据':m.s===1?'，实时':'')+'）';
+    bars($('#cMin'),m.min.map((v,i)=>({label:pad(i),v:v,s:m.s?m.s:-1,
+      tip:pad(h)+':'+pad(i)+'  '+num(v)+' mm'})),{minMax:.5,labelW:26});
+  }catch(e){$('#minTitle').textContent=key+' 分钟明细：'+e.message}
+}
+function shiftDay(n){const d=parseYmd(curDate);d.setDate(d.getDate()+n);curDate=ymd(d);
+  $('#minPanel').style.display='none';lastMinH=-1;loadDay()}
+$('#prev').onclick=()=>shiftDay(-1);$('#next').onclick=()=>shiftDay(1);
+$('#prev2').onclick=()=>shiftDay(-1);$('#next2').onclick=()=>shiftDay(1);
+$('#today').onclick=()=>{curDate=ymd(new Date());$('#minPanel').style.display='none';lastMinH=-1;loadDay()};
+$('#date').onchange=e=>{if(e.target.value){curDate=e.target.value;$('#minPanel').style.display='none';lastMinH=-1;loadDay()}};
+$('#minClose').onclick=()=>{$('#minPanel').style.display='none';lastMinH=-1;
+  document.querySelectorAll('#tDay tr').forEach(tr=>tr.classList.remove('sel'))};
+
+/* ---------- query view ---------- */
+let qData=null;
+function qLabel(by,t){return by==='month'?t:by==='day'?t.slice(5):t.slice(5,13)}
+function fillGaps(by,from,to,rows){const map={};rows.forEach(r=>map[r.t]=r);const out=[];
+  if(by==='day'){for(let d=parseYmd(from),e=parseYmd(to);d<=e;d.setDate(d.getDate()+1)){const k=ymd(d);out.push(map[k]||{t:k,v:0,n:0,rainy:0,max:0,none:true})}}
+  else if(by==='month'){let y=+from.slice(0,4),m=+from.slice(5,7);const ey=+to.slice(0,4),em=+to.slice(5,7);
+    while(y<ey||(y===ey&&m<=em)){const k=y+'-'+pad(m);out.push(map[k]||{t:k,v:0,n:0,rainy:0,max:0,none:true});if(++m>12){m=1;y++}}}
+  else rows.forEach(r=>out.push(r));return out}
+function drawQ(){if(!qData)return;const q=qData;
+  bars($('#cQ'),q.rows.map(r=>({label:qLabel(q.by,r.t),v:r.v,s:r.none?0:2,
+    tip:r.t+'  '+(r.none?'无数据':num(r.v)+' mm')})),
+    {minMax:1,labelW:q.by==='hour'?70:q.by==='month'?60:46})}
+async function loadQuery(){
+  const from=$('#qFrom').value,to=$('#qTo').value,by=$('#qBy').value;if(!from||!to)return;
+  const qs='from='+from+'&to='+to+'&by='+by;$('#qCsv').href='/export.csv?'+qs;
+  try{const q=await api('/api/range?'+qs),s=q.summary;
+    q.rows=fillGaps(by,from,to,q.rows);qData=q;
+    const cov=s.hours_expected?Math.round(100*s.hours_with_data/s.hours_expected):0;
+    const C=(k,v,unit,sub)=>{const d=el('div',null,'card');d.appendChild(el('div',k,'k'));
+      const vv=el('div',null,'v');vv.appendChild(el('span',v));
+      if(unit)vv.appendChild(el('small',unit));d.appendChild(vv);
+      if(sub!=null)d.appendChild(el('div',sub,'s'));return d};
+    const box=$('#qCards');box.textContent='';
+    box.appendChild(C('累计雨量',num(s.total),'mm'));
+    box.appendChild(C('有雨日数',s.rainy_days+' 天','', '共 '+s.days_with_data+' 天有数据'));
+    box.appendChild(C('有雨小时数',s.rain_hours+' 小时'));
+    box.appendChild(C('最大小时雨量',s.max_hour.t?num(s.max_hour.v):'–','mm',s.max_hour.t?s.max_hour.t.slice(0,16):''));
+    box.appendChild(C('最大日雨量',s.max_day.t?num(s.max_day.v):'–','mm',s.max_day.t||''));
+    box.appendChild(C('数据完整度',cov+' %','',s.hours_with_data+' / '+s.hours_expected+' 小时'));
+    fillRows($('#tQ'),q.rows.map(r=>[r.t,{t:r.none?'–':num(r.v),c:r.v>0?'rain':''},
+      r.none?'–':r.n,r.none?'–':r.rainy,r.none?'–':num(r.max)]));
+    drawQ();
+  }catch(e){$('#qCards').textContent='';$('#qCards').appendChild(el('div','查询失败：'+e.message,'msg'));
+    $('#tQ').textContent='';qData=null;bars($('#cQ'),[],{})}
+}
+function setRange(k){const t=new Date(),to=ymd(t);let f=new Date(t);
+  if(k==='month'){f=new Date(t.getFullYear(),t.getMonth(),1)}
+  else if(k==='year'){f=new Date(t.getFullYear(),0,1)}
+  else{f.setDate(f.getDate()-(+k-1))}
+  $('#qFrom').value=ymd(f);$('#qTo').value=to;$('#qBy').value=k==='year'?'month':'day';loadQuery()}
+document.querySelectorAll('[data-q]').forEach(b=>b.onclick=()=>setRange(b.dataset.q));
+$('#qGo').onclick=loadQuery;
+
+/* ---------- alarm view ---------- */
+async function loadAlarms(){
+  try{const a=await api('/api/alarms');
+    const th=a.threshold?(a.threshold/1000).toFixed(3)+' V':'未设置';
+    $('#alarmNote').innerHTML='电压报警阈值 <b>'+th+'</b> · 当前状态 <b>'+
+      (STATES[a.state]||[a.state||'未知'])[0]+'</b>'+(a.updated?' · 更新于 '+a.updated:'');
+    if(!a.rows.length){fillRows($('#tAlarm'),[[{t:'最近没有报警记录',c:'l mut'}]]);
+      $('#tAlarm').firstChild.firstChild.colSpan=3;}
+    else fillRows($('#tAlarm'),a.rows.map(r=>[r.t,
+      {t:r.kind==='clock'?'时钟异常':'电压偏低',c:'l '+(r.kind==='clock'?'k-clock':'k-volt')},
+      {t:r.detail,c:'l'}]));
+  }catch(e){$('#alarmNote').textContent='';fillRows($('#tAlarm'),[[{t:'读取失败：'+e.message,c:'l mut'}]]);
+    $('#tAlarm').firstChild.firstChild.colSpan=3}
+}
+$('#alarmReload').onclick=loadAlarms;
+
+/* ---------- reports ---------- */
+document.querySelectorAll('[data-rep]').forEach(b=>b.onclick=()=>{const r=b.dataset.rep;
+  if(r==='day'){setTab('day');}
+  else if(r==='alarm'){setTab('alarm');loadAlarms();}
+  else if(r==='month'){const d=parseYmd(curDate);setTab('query');
+    $('#qFrom').value=ymd(new Date(d.getFullYear(),d.getMonth(),1));
+    $('#qTo').value=ymd(new Date(d.getFullYear(),d.getMonth()+1,0));
+    $('#qBy').value='day';loadQuery();}
+  else if(r==='year'){const y=parseYmd(curDate).getFullYear();setTab('query');
+    $('#qFrom').value=y+'-01-01';$('#qTo').value=y+'-12-31';$('#qBy').value='month';loadQuery();}});
+
+/* ---------- tabs / refresh ---------- */
+let tab='day';
+function setTab(t){tab=t;
+  document.querySelectorAll('nav button').forEach(x=>x.classList.toggle('on',x.dataset.tab===t));
+  document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('on',x.id==='tab-'+t));
+  if(t==='day')loadDay();
+  else if(t==='query'){if(!qData)setRange('month');else drawQ()}
+  else if(t==='alarm')loadAlarms();
+  else loadStatus().then(renderStatus)}
+document.querySelectorAll('nav button').forEach(b=>b.onclick=()=>setTab(b.dataset.tab));
+window.addEventListener('resize',()=>{if(tab==='day')drawDay();else if(tab==='query')drawQ()});
+window.addEventListener('keydown',e=>{
+  if(tab!=='day'||!dayData)return;
+  if(e.target&&(e.target.tagName==='INPUT'||e.target.tagName==='SELECT'))return;
+  if(e.key==='ArrowLeft')shiftDay(-1);else if(e.key==='ArrowRight')shiftDay(1)});
+setInterval(()=>{loadStatus();loadSummary();
+  if(tab==='day'&&curDate===ymd(new Date()))loadDay();
+  else if(tab==='status')loadStatus().then(renderStatus);
+  else if(tab==='alarm')loadAlarms()},30000);
+loadStatus();loadSummary();loadDay();
+</script>
+</body>
+</html>

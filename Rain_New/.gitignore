@@ -1,0 +1,10 @@
+rain
+rain.exe
+build/
+dist/
+*.db
+*.db-wal
+*.db-shm
+logs/
+tests/*.exe
+rain.ini

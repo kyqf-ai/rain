@@ -1,0 +1,34 @@
+# Builds rain.exe (32- and 64-bit) on a Windows runner, runs the portable unit tests natively on Windows,
+# and uploads the exe as a downloadable artifact. Push this repository to GitHub, open Actions -> latest run -> Artifacts.
+name: build-windows
+on: [push, pull_request, workflow_dispatch]
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { sys: MINGW64, pkg: mingw-w64-x86_64-gcc, name: rain-win64 }
+          - { sys: MINGW32, pkg: mingw-w64-i686-gcc,   name: rain-win32 }
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: ${{ matrix.sys }}
+          install: ${{ matrix.pkg }} unzip curl
+      - name: Fetch SQLite amalgamation
+        run: tools/fetch_sqlite.sh
+      - name: Unit tests on Windows (protocol, config, UI logic, storage)
+        run: tools/build_win.sh test
+      - name: Build tray GUI
+        run: tools/build_win.sh
+      - name: Smoke test (the exe starts and exits cleanly)
+        run: ./dist/rain.exe version
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.name }}
+          path: dist/rain.exe

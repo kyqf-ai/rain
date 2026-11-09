@@ -1,0 +1,34 @@
+#pragma code_page(65001)
+#include <windows.h>
+#include "../src/version.h"
+
+1 ICON "rain.ico"
+
+1 VERSIONINFO
+FILEVERSION    RAIN_VERSION_MAJOR, RAIN_VERSION_MINOR, RAIN_VERSION_PATCH, 0
+PRODUCTVERSION RAIN_VERSION_MAJOR, RAIN_VERSION_MINOR, RAIN_VERSION_PATCH, 0
+FILEFLAGSMASK  0x3fL
+FILEFLAGS      0x0L
+FILEOS         0x40004L
+FILETYPE       0x1L
+FILESUBTYPE    0x0L
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "080404b0"
+        BEGIN
+            VALUE "CompanyName",      RAIN_COMPANY
+            VALUE "FileDescription",  "雨量采集托盘程序"
+            VALUE "FileVersion",      RAIN_VERSION
+            VALUE "InternalName",     "rain"
+            VALUE "LegalCopyright",   RAIN_COPYRIGHT
+            VALUE "OriginalFilename", "rain.exe"
+            VALUE "ProductName",      "雨量采集"
+            VALUE "ProductVersion",   RAIN_VERSION
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x0804, 1200
+    END
+END

@@ -1,0 +1,36 @@
+; rain.ini - copy this file to rain.ini next to rain.exe and edit.
+; Keep the file UTF-8 (or ASCII). Lines starting with ; or # are comments;
+; a ';' after a value (preceded by a space) starts a trailing comment.
+
+[serial]
+port=COM1               ; Windows: COM1, COM2 ... ; Linux: /dev/ttyS0, /dev/ttyUSB0
+baud=9600               ; the device speaks 9600 8N1
+dtr=0
+rts=0
+
+[device]
+machine=                ; expected machine id, e.g. SRY1C-2211-00001. Empty = accept whatever the device reports.
+                        ; If set and different from what the device reports, nothing is stored.
+name=                   ; display name (UTF-8)
+unit=100                ; tip counts per mm (0x000A = 10 counts = 0.10 mm)
+
+[collect]
+poll_sec=60             ; status + current-hour refresh interval (minimum 5)
+backfill_hours=72       ; how far back to look for missing hours after a downtime
+max_fetch=24            ; max past hours fetched per cycle (keeps the serial line free)
+retries=3               ; attempts per request
+timeout_ms=1500         ; wait for a reply per attempt
+reconnect_sec=10        ; wait before reopening the port after an error
+status_hist_sec=600     ; how often a status row is kept in the history table
+endian=auto             ; byte order of the 60 minute values: auto | le | be   (verify with: rain probe)
+max_per_min=1000        ; plausibility limit per minute (counts) used by auto detection
+
+[web]
+enable=1
+bind=127.0.0.1          ; 0.0.0.0 makes the UI reachable from other PCs on the LAN (no password!)
+port=9099
+
+[paths]
+db=rain.db
+logdir=logs
+trace=0                 ; 1 = log every byte sent/received
